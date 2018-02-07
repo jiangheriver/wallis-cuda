@@ -637,7 +637,7 @@ __global__ void cuda_wallis_grid(float2 *pf2R0R1Buffer, int iGridSizeX, int iGri
 	int iPointY = iYInGrid + iGridY*GRID_LENGTH;
 	int iPixelValue = ((int)(iXInGrid&&iYInGrid))* ((int)tex2D(cuda_texPixel, iPointX, iPointY));
 
-	//discard pixels which value is zero (means pad pixel in the four corner of raster imag)
+	//discard pixels which value is zero (means pad pixel in the four corner of raster image, or the most left/top pixels in CUDA thread block)
 	iSumValidArray[iGridOffset] = (int)(iPixelValue > 0);
 	iSumValueArray[iGridOffset] = iPixelValue;
 	iSumSquareArray[iGridOffset] = iPixelValue*iPixelValue;
