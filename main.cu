@@ -31,16 +31,19 @@ void *BlockThread(void *pvParam);
 sem_t g_semRasterIO;
 #endif
 
-//for GeoTiff or other formats, usually read specifies numbers of image lines as one block, this number set to 1024 in my program
+//for GeoTiff or other formats, usually read specifies numbers of image lines as one block,
+//this number set to 1024 in my program
 #define READ_BLOCK_LINE 1024
 
-//the recommend neighbor window size for wallis is recommendly set to an odd number between 30 to 50 in related documents of image process
-//since 32*32=1024, equals to the maximum number of threads per GPU thread block (1024, when CUDA compute capability >= 2.0)
+//the recommend neighbor window size for wallis is recommendly set to an odd number between
+//30 to 50 in related documents of image process, since 32*32=1024, equals to 
+//the maximum number of threads per GPU thread block (1024, when CUDA compute capability >= 2.0)
 //so I set GRID_LENGTH to 32, means the pixel's neighbor windows size is 31
 //for point (X,Y), the rectangle for calculate R0 and R1 is rect(X-15,Y-15,X+15,Y+15)
 #define GRID_LENGTH 32
 
-//brightness coeff (B_VALUE), constract coeff (C_VALUE), target sigma (TARGET_SIGMA_VALUE) in wallis filter
+//brightness coeff (B_VALUE), constract coeff (C_VALUE), target sigma (TARGET_SIGMA_VALUE)
+//in wallis filter
 #define B_VALUE 0.5f
 #define C_VALUE 0.8f
 #define TARGET_SIGMA_VALUE 60.0f
@@ -51,14 +54,16 @@ sem_t g_semRasterIO;
 //maximum support raster image's width
 #define REQUIRE_SUPPORT_RASTER_WIDTH 40000
 
-//as the source code belows mentioned, for image lines' block ("main" area), we need addtional each GRID_LENGTH/2 lines for "pre" and "post" area
+//as the source code belows mentioned, for image lines' block ("main" area), we need addtional
+//each GRID_LENGTH/2 lines for "pre" and "post" area
 const int GRID_HALF_LENGTH = GRID_LENGTH / 2;
 const int PROCESS_EXTEND_LENGTH = READ_BLOCK_LINE + GRID_LENGTH;
 
 //R0 and R1 were stored in float2 structure
 //calculate texture buffer's width and height for store R0 and R1, include padding for alignment, ceiling...
 const int CUDA_GRID_ALIGNMENT = ALIGNMENT / sizeof(float2);
-const int CUDA_GRID_SIZE_X = (REQUIRE_SUPPORT_RASTER_WIDTH / GRID_LENGTH / CUDA_GRID_ALIGNMENT)*CUDA_GRID_ALIGNMENT + CUDA_GRID_ALIGNMENT;
+const int CUDA_GRID_SIZE_X = (REQUIRE_SUPPORT_RASTER_WIDTH / GRID_LENGTH / CUDA_GRID_ALIGNMENT)*CUDA_GRID_ALIGNMENT +\
+				 CUDA_GRID_ALIGNMENT;
 const int CUDA_GRID_SIZE_Y = (PROCESS_EXTEND_LENGTH - 1) / GRID_LENGTH + 1;
 
 //struct use by process threade
@@ -76,7 +81,8 @@ typedef struct PROCESS_BLOCK
 GDALRasterBand *g_pBandOutput;
 unsigned char *g_pucWriteBuffer;
 
-//cuda_texPixel,cuda_formatDestPixel,cuda_textBlockArrayT: use for texture memory (image pixel buffer, copy from pucBlockExtendBuffer)
+//cuda_texPixel,cuda_formatDestPixel,cuda_textBlockArrayT: use for texture memory (image pixel buffer, 
+//								copy from pucBlockExtendBuffer)
 //cuda_texR0R1,cuda_formatDescR0R1,cuda_textR0R1ArrayT: use for texture memory (store R0 and R1)
 texture<unsigned char, 2> cuda_texPixel;
 texture<float2, 2> cuda_texR0R1;
@@ -90,7 +96,8 @@ cudaArray_t cuda_texR0R1ArrayT;
 //output block buffer after wallis process, will copy to g_pucWriteBuffer
 unsigned char *cuda_pucBlockOutputBuffer;
 
-//buffer for store R0 and R1, not in texture, this buffer is update in cuda_wallis_grid, and will copy to texture before cuda_wallis_inner
+//buffer for store R0 and R1, not in texture, this buffer is update in cuda_wallis_grid, and will copy to texture
+//before cuda_wallis_inner
 float2 *cuda_pf2R0R1Buffer;
 
 //constant values use in GPU, the meaning is same as above
@@ -188,7 +195,9 @@ int main(int argc, char *argv[])
 	}
 
 	//create output image file
-	GDALDataset *pDatasetOutput = GetGDALDriverManager()->GetDriverByName("GTIFF")->Create(strOutputFilename.c_str(), iRasterSizeX, iRasterSizeY, 1, GDT_Byte, NULL);
+	GDALDataset *pDatasetOutput = GetGDALDriverManager()->GetDriverByName("GTIFF")->Create(\
+					strOutputFilename.c_str(), iRasterSizeX, iRasterSizeY, \
+					1, GDT_Byte, NULL);
 	if (pDatasetOutput == NULL)
 	{
 		GDALClose(pDatasetInput);
@@ -209,7 +218,8 @@ int main(int argc, char *argv[])
 
 	//alloc cuda_pucBlockOutputBuffer, and get the width after padding for alignment (nWidth)
 	size_t nWidth;
-	if (cudaMallocPitch((void**)&cuda_pucBlockOutputBuffer, &nWidth, (size_t)iRasterSizeX, READ_BLOCK_LINE) != cudaSuccess)
+	if (cudaMallocPitch((void**)&cuda_pucBlockOutputBuffer, &nWidth, (size_t)iRasterSizeX, READ_BLOCK_LINE) \
+		!= cudaSuccess)
 	{
 		GDALClose(pDatasetInput);
 		GDALClose(pDatasetOutput);
@@ -259,14 +269,16 @@ int main(int argc, char *argv[])
 	int iWidth = (int)nWidth;
 	int iPadSize = iWidth - iRasterSizeX;
 
-	//texture memory for store image lines' block, the format is 8bit unsigned char, set filterMode (Point) and addressMode (Clamp)
+	//texture memory for store image lines' block, the format is 8bit unsigned char,
+	//set filterMode (Point) and addressMode (Clamp)
 	cuda_texPixel.normalized = 0;
 	cuda_texPixel.filterMode = cudaFilterModePoint;
 	cuda_texPixel.addressMode[0] = cudaAddressModeClamp;
 	cuda_texPixel.addressMode[1] = cudaAddressModeClamp;
 
 	cuda_formatDescPixel = cudaCreateChannelDesc<unsigned char>();
-	if (cudaMallocArray(&cuda_texBlockArrayT, &cuda_formatDescPixel, nWidth, (size_t)PROCESS_EXTEND_LENGTH) != cudaSuccess)
+	if (cudaMallocArray(&cuda_texBlockArrayT, &cuda_formatDescPixel, nWidth, (size_t)PROCESS_EXTEND_LENGTH)\
+		 != cudaSuccess)
 	{
 		GDALClose(pDatasetInput);
 		GDALClose(pDatasetOutput);
@@ -276,14 +288,16 @@ int main(int argc, char *argv[])
 		return -10;
 	}
 
-	//texture memory for store R0 and R1, the format is float2 stucture, set filterMode (Linear) and addressMode (Clamp)
+	//texture memory for store R0 and R1, the format is float2 stucture,
+	//set filterMode (Linear) and addressMode (Clamp)
 	cuda_texR0R1.normalized = 0;
 	cuda_texR0R1.filterMode = cudaFilterModeLinear;
 	cuda_texR0R1.addressMode[0] = cudaAddressModeClamp;
 	cuda_texR0R1.addressMode[1] = cudaAddressModeClamp;
 
 	cuda_formatDescR0R1 = cudaCreateChannelDesc<float2>();
-	if (cudaMallocArray(&cuda_texR0R1ArrayT, &cuda_formatDescR0R1, CUDA_GRID_SIZE_X, CUDA_GRID_SIZE_Y) != cudaSuccess)
+	if (cudaMallocArray(&cuda_texR0R1ArrayT, &cuda_formatDescR0R1, CUDA_GRID_SIZE_X, CUDA_GRID_SIZE_Y)\
+		 != cudaSuccess)
 	{
 		GDALClose(pDatasetInput);
 		GDALClose(pDatasetOutput);
@@ -301,7 +315,8 @@ int main(int argc, char *argv[])
 	g_pucWriteBuffer = new unsigned char[nOutSize];
 	unsigned short *pusReadBuffer = new unsigned short[nInSize];
 
-	//"ping pong" mode, when reading BlockB, processing BlockA at same time; when reading BlockA, processing BlockB at same time...
+	//"ping pong" mode, when reading BlockB, processing BlockA at same time;
+	//when reading BlockA, processing BlockB at same time...
 	bool bBlockTag = true;
 	PROCESS_BLOCK processBlockA;
 	PROCESS_BLOCK processBlockB;
@@ -325,7 +340,9 @@ int main(int argc, char *argv[])
 		pucReadBufferArray[i] = new unsigned char[nOutSize];
 	}
 
-	if ((processBlockA.pucBlockExtendBuffer == NULL) || (processBlockB.pucBlockExtendBuffer == NULL) || (g_pucWriteBuffer == NULL) || (pusReadBuffer == NULL) || (pucReadBufferArray[0] == NULL) || (pucReadBufferArray[1] == NULL) || (pucReadBufferArray[2] == NULL))
+	if ((processBlockA.pucBlockExtendBuffer == NULL) || (processBlockB.pucBlockExtendBuffer == NULL) || \
+		(g_pucWriteBuffer == NULL) || (pusReadBuffer == NULL) || (pucReadBufferArray[0] == NULL) || \
+		(pucReadBufferArray[1] == NULL) || (pucReadBufferArray[2] == NULL))
 	{
 		if (processBlockA.pucBlockExtendBuffer != NULL)
 		{
@@ -363,7 +380,8 @@ int main(int argc, char *argv[])
 		return -11;
 	}
 
-        //the bottom GRID_HALF_LENGTH lines of "pre" buffer + READ_BLOCK_LINE lines of "main" buffer+ the top READ_BLOCK_LINE lines of "post" buffer ==> Extend Buffer
+        //the bottom GRID_HALF_LENGTH lines of "pre" buffer + READ_BLOCK_LINE lines of "main" buffer+the top READ_BLOCK_LINE lines of "post" buffer
+	//  ==> Extend Buffer
         size_t nPrePostSize = nWidth*GRID_HALF_LENGTH;
         size_t nMainSize = nWidth*READ_BLOCK_LINE;
         size_t nPreOffset = nWidth*(READ_BLOCK_LINE - GRID_HALF_LENGTH);
@@ -404,11 +422,13 @@ int main(int argc, char *argv[])
 		//read image lines from file
 #ifdef _MSC_VER
 		WaitForSingleObject(g_hMutexRasterIO, INFINITE);
-		pBand->RasterIO(GF_Read, 0, iLine, iRasterSizeX, iReadLine, pusReadBuffer, iRasterSizeX, iReadLine, GDT_UInt16, 0, 0);
+		pBand->RasterIO(GF_Read, 0, iLine, iRasterSizeX, iReadLine, pusReadBuffer, \
+				iRasterSizeX, iReadLine, GDT_UInt16, 0, 0);
 		ReleaseMutex(g_hMutexRasterIO);
 #else
 		sem_wait(&g_semRasterIO);
-		pBand->RasterIO(GF_Read, 0, iLine, iRasterSizeX, iReadLine, pusReadBuffer, iRasterSizeX, iReadLine, GDT_UInt16, 0, 0);
+		pBand->RasterIO(GF_Read, 0, iLine, iRasterSizeX, iReadLine, pusReadBuffer, \
+				iRasterSizeX, iReadLine, GDT_UInt16, 0, 0);
 		sem_post(&g_semRasterIO);
 #endif
 
@@ -421,7 +441,8 @@ int main(int argc, char *argv[])
 
 			for (int j = 0; j < iRasterSizeX; j++)
 			{
-				*pucOutput = (unsigned char)max(min(f32NormalizeCoeff*((float)(*pusInput) - f32MinValue) + 0.5f, 255.0f), 0.0f);
+				*pucOutput = (unsigned char)max(min(f32NormalizeCoeff* \
+						((float)(*pusInput) - f32MinValue) + 0.5f, 255.0f), 0.0f);
 				pusInput++;
 				pucOutput++;
 			}
@@ -436,12 +457,14 @@ int main(int argc, char *argv[])
 			PROCESS_BLOCK *pBlockCurrent = bBlockTag ? (&processBlockA) : (&processBlockB);
 			bBlockTag = bBlockTag ? false : true;
 
-			//iLine is the begin image line of "post", so the process image line index (of "main") is iLine-READ_BLOCK_LINE
+			//iLine is the begin image line of "post",
+			// so the process image line index (of "main") is iLine-READ_BLOCK_LINE
 			unsigned char *pucExtend = pBlockCurrent->pucBlockExtendBuffer;
 			pBlockCurrent->iPosY = iLine - READ_BLOCK_LINE;
 			pBlockCurrent->iProcessSizeY = READ_BLOCK_LINE;
 
-			//the bottom GRID_HALF_LENGTH lines of "pre" buffer, if not exists (iIndexPost==1), fill with zero
+			//the bottom GRID_HALF_LENGTH lines of "pre" buffer,
+			//if not exists (iIndexPost==1), fill with zero
 			if (iIndexPost>1)
 			{
 				memcpy(pucExtend, pucPreBuffer + nPreOffset, nPrePostSize);
@@ -466,7 +489,8 @@ int main(int argc, char *argv[])
 				memcpy(pucExtend, pucPostBuffer, nPrePostSize);
 			}
 
-			//wait last process thread finished (wallis filter and write to file), then create new one
+			//wait last process thread finished (wallis filter and write to file),
+			//then create new one
 #ifdef _MSC_VER
 			if (hThreadLast)
 			{
@@ -485,7 +509,8 @@ int main(int argc, char *argv[])
 #endif
 		}
 
-		//process the bottom block, this block would copy to "main" buffer, the last "main" buffer would be "pre" now (use its bottom GRID_HALF_LENGTH lines)
+		//process the bottom block, this block would copy to "main" buffer,
+		//the last "main" buffer would be "pre" now (use its bottom GRID_HALF_LENGTH lines)
 		//and fill "post" buffer with zero. other method is similar to above
 		if (bMostBottomLines)
 		{
@@ -499,7 +524,8 @@ int main(int argc, char *argv[])
 			memcpy(pucExtend, pucMainBuffer + nPreOffset, nPrePostSize);
 			pucExtend += nPrePostSize;
 
-			//copy to "main" buffer, maybe it was less than READ_BLOCK_LINE, fill the remain and "post" with zero
+			//copy to "main" buffer,
+			//maybe it was less than READ_BLOCK_LINE, fill the remain and "post" with zero
 			if (iReadLine < READ_BLOCK_LINE)
 			{
 				memcpy(pucExtend, pucPostBuffer, nReadSize);
@@ -578,37 +604,44 @@ void *BlockThread(void *pvParam)
 	int iGridSizeX = pBlockCurrent->iGridSizeX;
 	int iGridSizeY = (iProcessSizeY + (GRID_LENGTH - 1)) / GRID_LENGTH + 1;
 
-	//example: if the image is 32000*32000, GRID_LENGTH=32, then the CUDA thread block to calculate R0 and R1 would be 1001*1001
-	//but when use R0 and R1 to calulate wallis filtered pixels, the CUDA thread block would be 1000*1000
-	//CUDA threads in CUDA thread block is 32*32
+	//example: if the image is 32000*32000, GRID_LENGTH=32,
+	//	then the CUDA thread block to calculate R0 and R1 would be 1001*1001;
+	//	but when use R0 and R1 to calulate wallis filtered pixels, 
+	//	the CUDA thread block would be 1000*1000;
+	//	CUDA threads in CUDA thread block is 32*32
 	dim3 dimWallisGridBlocks(iGridSizeX, iGridSizeY);
 	dim3 dimWallisInnerBlocks(iGridSizeX - 1, iGridSizeY - 1);
 	dim3 dimThreads(GRID_LENGTH, GRID_LENGTH);
 
-	//copy buffer to texture, y-axis would extend GRID_HALF_LENGTH lines ("pre" and "post"), x-axis not extend
-	//calculate R0 and R1 in GPU
-	cudaMemcpyToArray(cuda_texBlockArrayT, 0, 0, pBlockCurrent->pucBlockExtendBuffer, iWidth*(iProcessSizeY + GRID_LENGTH), cudaMemcpyHostToDevice);
+	//copy buffer to texture, calculate R0 and R1 in GPU
+	//y-axis would extend GRID_HALF_LENGTH lines ("pre" and "post"), x-axis not extend
+	cudaMemcpyToArray(cuda_texBlockArrayT, 0, 0, pBlockCurrent->pucBlockExtendBuffer, \
+				iWidth*(iProcessSizeY + GRID_LENGTH), cudaMemcpyHostToDevice);
 	cudaBindTextureToArray(cuda_texPixel, cuda_texBlockArrayT, cuda_formatDescPixel);
 	cuda_wallis_grid <<<dimWallisGridBlocks, dimThreads >>>(cuda_pf2R0R1Buffer, iGridSizeX, iGridSizeY);
 
 	//copy R0 and R1 to texture, calculate wallis filtered value in GPU
-	cudaMemcpyToArray(cuda_texR0R1ArrayT, 0, 0, cuda_pf2R0R1Buffer, sizeof(float2)*CUDA_GRID_SIZE_X*iGridSizeY, cudaMemcpyDeviceToDevice);
+	cudaMemcpyToArray(cuda_texR0R1ArrayT, 0, 0, cuda_pf2R0R1Buffer, 
+				sizeof(float2)*CUDA_GRID_SIZE_X*iGridSizeY, cudaMemcpyDeviceToDevice);
 	cudaBindTextureToArray(cuda_texR0R1, cuda_texR0R1ArrayT, cuda_formatDescR0R1);
 	cuda_wallis_inner <<<dimWallisInnerBlocks, dimThreads >>>(cuda_pucBlockOutputBuffer, iWidth);
 
 	//unbind textures and copy wallis filtered pixels' value to system memory to output
 	cudaUnbindTexture(cuda_texPixel);
 	cudaUnbindTexture(cuda_texR0R1);
-	cudaMemcpy(g_pucWriteBuffer, cuda_pucBlockOutputBuffer, iWidth*iProcessSizeY, cudaMemcpyDeviceToHost);
+	cudaMemcpy(g_pucWriteBuffer, cuda_pucBlockOutputBuffer, iWidth*iProcessSizeY, \
+			cudaMemcpyDeviceToHost);
 
 	//write output image line to file
 #ifdef _MSC_VER
 	WaitForSingleObject(g_hMutexRasterIO, INFINITE);
-	g_pBandOutput->RasterIO(GF_Write, 0, iPosY, iRasterSizeX, iProcessSizeY, g_pucWriteBuffer, iRasterSizeX, iProcessSizeY, GDT_Byte, 0, iWidth);
+	g_pBandOutput->RasterIO(GF_Write, 0, iPosY, iRasterSizeX, iProcessSizeY, g_pucWriteBuffer, \
+				iRasterSizeX, iProcessSizeY, GDT_Byte, 0, iWidth);
 	ReleaseMutex(g_hMutexRasterIO);
 #else
 	sem_wait(&g_semRasterIO);
-	g_pBandOutput->RasterIO(GF_Write, 0, iPosY, iRasterSizeX, iProcessSizeY, g_pucWriteBuffer, iRasterSizeX, iProcessSizeY, GDT_Byte, 0, iWidth);
+	g_pBandOutput->RasterIO(GF_Write, 0, iPosY, iRasterSizeX, iProcessSizeY, g_pucWriteBuffer, \
+				iRasterSizeX, iProcessSizeY, GDT_Byte, 0, iWidth);
 	sem_post(&g_semRasterIO);
 #endif
 
@@ -629,15 +662,18 @@ __global__ void cuda_wallis_grid(float2 *pf2R0R1Buffer, int iGridSizeX, int iGri
 	int iGridX = blockIdx.x;
 	int iGridY = blockIdx.y;
 
-	//for point (iGridX*32,iGridY*32), the rectangle for calculate R0 and R1 is rect(iGridX*32-15,iGridY*32-15,iGridX*32+15,iGridY*32+15)
+	//for point (iGridX*32,iGridY*32),
+	//the rectangle for calculate R0 and R1 is rect(iGridX*32-15,iGridY*32-15,iGridX*32+15,iGridY*32+15)
 	//but the rectangle in the CUDA thread block is rect(iGridX*32-16,iGridY*32-16,iGridX*32+15,iGridY*32+15)
-	//the most left pixels (iXInGrid==0) and the most top pixels (iYInGrid==0) would not be calculated for rectangle's mean and variance value
+	//the most left pixels (iXInGrid==0) and the most top pixels (iYInGrid==0)
+	//would not be calculated for rectangle's mean and variance value
 	//so I set these pixel's iPixelValue to zero	
 	int iPointX = iXInGrid - cuda_GRID_HALF_LENGTH + iGridX*GRID_LENGTH;
 	int iPointY = iYInGrid + iGridY*GRID_LENGTH;
 	int iPixelValue = ((int)(iXInGrid&&iYInGrid))* ((int)tex2D(cuda_texPixel, iPointX, iPointY));
 
-	//discard pixels which value is zero (means pad pixel in the four corner of raster image, or the most left/top pixels in CUDA thread block)
+	//discard pixels which value is zero (means pad pixel in the four corner of raster image,
+	//or the most left/top pixels in CUDA thread block)
 	iSumValidArray[iGridOffset] = (int)(iPixelValue > 0);
 	iSumValueArray[iGridOffset] = iPixelValue;
 	iSumSquareArray[iGridOffset] = iPixelValue*iPixelValue;
@@ -669,11 +705,14 @@ __global__ void cuda_wallis_grid(float2 *pf2R0R1Buffer, int iGridSizeX, int iGri
 			//calculate mean and variance value
 			int iSumSquare = iSumSquareArray[0];
 			float f32FilterMean = ((float)iSumValueArray[0]) / iValidPixelCount;
-			float f32FilterVariance = (float)(iSumSquare / iValidPixelCount) + ((float)(iSumSquare%iValidPixelCount)) / iValidPixelCount - f32FilterMean*f32FilterMean;
+			float f32FilterVariance = (float)(iSumSquare / iValidPixelCount) + \
+					((float)(iSumSquare%iValidPixelCount)) / iValidPixelCount - \
+					f32FilterMean*f32FilterMean;
 			f32FilterVariance *= (float)(f32FilterVariance > 0.0f);
 
 			//calculate R0 and R1 value
-			float f32R1 = cuda_C_MUL_SIGMA_VALUE / (cuda_C_VALUE*sqrtf(f32FilterVariance) + cuda_1_C_MUL_SIGMA_VALUE);
+			float f32R1 = cuda_C_MUL_SIGMA_VALUE / (cuda_C_VALUE*sqrtf(f32FilterVariance) + \
+					cuda_1_C_MUL_SIGMA_VALUE);
 			pf2R0R1->x = cuda_B_MUL_127_5_VALUE + (cuda_1_MINUS_B_VALUE - f32R1)*f32FilterMean;
 			pf2R0R1->y = f32R1;
 		}
@@ -687,7 +726,8 @@ __global__ void cuda_wallis_inner(unsigned char *pucBlockOutputBuffer, int iWidt
 	float f32GridX = ((float)iPointX)*cuda_1_DIV_GRID_LENGTH;
 	float f32GridY = ((float)iPointY)*cuda_1_DIV_GRID_LENGTH;
 
-	//pixels store in texture memory were begin with "pre" area (GRID_HALF_LENGTH lines), but R0 and R1 were not
+	//pixels store in texture memory were begin with "pre" area (GRID_HALF_LENGTH lines),
+	//but R0 and R1 were not.
 	//get interpolated R0 and R1
 	float f32PixelValue = (float)tex2D(cuda_texPixel, iPointX, iPointY + cuda_GRID_HALF_LENGTH);
 	float2 f2R0R1 = tex2D(cuda_texR0R1, f32GridX, f32GridY);
