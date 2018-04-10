@@ -380,7 +380,9 @@ int main(int argc, char *argv[])
 		return -11;
 	}
 
-        //the bottom GRID_HALF_LENGTH lines of "pre" buffer + READ_BLOCK_LINE lines of "main" buffer+the top READ_BLOCK_LINE lines of "post" buffer
+        //the bottom GRID_HALF_LENGTH lines of "pre" buffer
+	//+ READ_BLOCK_LINE lines of "main" buffer
+	//+ the top READ_BLOCK_LINE lines of "post" buffer
 	//  ==> Extend Buffer
         size_t nPrePostSize = nWidth*GRID_HALF_LENGTH;
         size_t nMainSize = nWidth*READ_BLOCK_LINE;
