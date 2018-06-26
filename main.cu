@@ -411,7 +411,7 @@ int main(int argc, char *argv[])
 			bMostBottomLines = false;
 		}
 
-		size_t nSize=nWidth*iReadLine;
+		size_t nReadSize=nWidth*iReadLine;
                 int iIndexPost = iLine / READ_BLOCK_LINE;
 
 		//the block being read would be the "post" buffer
