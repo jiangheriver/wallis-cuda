@@ -28,7 +28,7 @@ HANDLE g_hMutexRasterIO;
 #define min(a,b) std::min(a,b)
 #define max(a,b) std::max(a,b)
 void *BlockThread(void *pvParam);
-sem_t g_semRasterIO;
+pthread_mutex_t g_hMutexRasterIO;
 #endif
 
 //for GeoTiff or other formats, usually read specifies numbers of image lines as one block,
@@ -394,8 +394,8 @@ int main(int argc, char *argv[])
 	HANDLE hThreadLast = NULL;
 	g_hMutexRasterIO = CreateMutex(NULL, FALSE, NULL);
 #else
-	pthread_t hThreadLast = NULL;
-	sem_init(&g_semRasterIO, 0, 0);
+	pthread_t hThreadLast = 0;
+	pthread_mutex_init(&g_hMutexRasterIO, NULL);
 #endif
 
 	//main process loop
@@ -428,10 +428,10 @@ int main(int argc, char *argv[])
 				iRasterSizeX, iReadLine, GDT_UInt16, 0, 0);
 		ReleaseMutex(g_hMutexRasterIO);
 #else
-		sem_wait(&g_semRasterIO);
+		pthread_mutex_lock(&g_hMutexRasterIO);
 		pBand->RasterIO(GF_Read, 0, iLine, iRasterSizeX, iReadLine, pusReadBuffer, \
 				iRasterSizeX, iReadLine, GDT_UInt16, 0, 0);
-		sem_post(&g_semRasterIO);
+		pthread_mutex_unlock(&g_hMutexRasterIO);
 #endif
 
 		//normalize pixels' value to range 0-255 (byte)
@@ -567,7 +567,7 @@ int main(int argc, char *argv[])
 		CloseHandle(g_hMutexRasterIO);
 #else
 		pthread_join(hThreadLast, NULL);
-		sem_destroy(g_hMutexRasterIO);
+		pthread_mutex_destroy(&g_hMutexRasterIO);
 #endif
 	}
 
@@ -641,10 +641,10 @@ void *BlockThread(void *pvParam)
 				iRasterSizeX, iProcessSizeY, GDT_Byte, 0, iWidth);
 	ReleaseMutex(g_hMutexRasterIO);
 #else
-	sem_wait(&g_semRasterIO);
+	pthread_mutex_lock(&g_hMutexRasterIO);
 	g_pBandOutput->RasterIO(GF_Write, 0, iPosY, iRasterSizeX, iProcessSizeY, g_pucWriteBuffer, \
 				iRasterSizeX, iProcessSizeY, GDT_Byte, 0, iWidth);
-	sem_post(&g_semRasterIO);
+	pthread_mutex_unlock(&g_hMutexRasterIO);
 #endif
 
 	printf("Write %d+%d lines...\n", iPosY, iProcessSizeY);
